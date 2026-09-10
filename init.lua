@@ -519,6 +519,120 @@ do
   ---@diagnostic disable-next-line: duplicate-set-field
   statusline.section_location = function() return '%2l:%-2v' end
 
+  -- Homepage with a quick reference for personal mappings.
+  local animation_frames = {
+    [[
+    ▄██▄
+    ▀████▄
+      ▀████▄
+      ▄████▀
+    ▄████▀
+    ▀██▀
+             ▀▀▀▀▀▀▀▀▀▀▀
+    ]],
+    [[
+      ▄██▄
+      ▀████▄
+        ▀███▄
+         ▄██▀
+       ▄██▀
+      ▀██▀
+             ▀▀▀▀▀▀▀▀▀▀▀
+    ]],
+    [[
+          ▄▄██▄
+         ███▀██▄
+          ███▄▄
+            ▀███
+         ███▄██
+          ▀▀▀
+
+    ]],
+    [[
+
+             ▄▄▄██▄▄▄
+            ███▀██▀███
+            ███▄██▄▄▄
+             ▀▀▀██▀███
+            ███▄██▄███
+             ▀▀▀██▀▀▀
+    ]],
+    [[
+          ▄▄██▄
+         ███▀██▄
+          ███▄▄
+            ▀███
+         ███▄██
+          ▀▀▀
+
+    ]],
+    [[
+      ▄██▄
+      ▀████▄
+        ▀███▄
+         ▄██▀
+       ▄██▀
+      ▀██▀
+             ▀▀▀▀▀▀▀▀▀▀▀
+    ]],
+  }
+  local animation_frame = 1
+  local linger_duration = 3000
+  local transition_duration = 500
+  local linger_frames = { [1] = true, [4] = true }
+  local starter = require 'mini.starter'
+
+  starter.setup {
+    header = function() return animation_frames[animation_frame] end,
+    items = {
+      { name = '<Space>cp  Copy relative file path', action = '', section = 'Most used' },
+      { name = '<Space>ca  Copy absolute file path', action = '', section = 'Most used' },
+    },
+    content_hooks = {
+      starter.gen_hook.aligning('center', 'center'),
+    },
+  }
+
+  local animation_timer
+  vim.api.nvim_create_autocmd('User', {
+    pattern = 'MiniStarterOpened',
+    callback = function(event)
+      if animation_timer then
+        animation_timer:stop()
+        animation_timer:close()
+      end
+
+      local starter_buffer = event.buf
+      animation_frame = 1
+      MiniStarter.refresh(starter_buffer)
+      local timer = vim.uv.new_timer()
+      animation_timer = timer
+      local advance_frame
+      local scheduled_advance
+      advance_frame = function()
+        if animation_timer ~= timer then
+          timer:stop()
+          timer:close()
+          return
+        end
+
+        if not vim.api.nvim_buf_is_valid(starter_buffer) or vim.bo[starter_buffer].filetype ~= 'ministarter' then
+          timer:stop()
+          timer:close()
+          animation_timer = nil
+          return
+        end
+
+        animation_frame = (animation_frame % #animation_frames) + 1
+        MiniStarter.refresh(starter_buffer)
+        local duration = linger_frames[animation_frame] and linger_duration or transition_duration
+        timer:start(duration, 0, scheduled_advance)
+      end
+      scheduled_advance = vim.schedule_wrap(advance_frame)
+      timer:start(linger_duration, 0, scheduled_advance)
+    end,
+  })
+
   -- ... and there is more!
   --  Check out: https://github.com/nvim-mini/mini.nvim
 end
