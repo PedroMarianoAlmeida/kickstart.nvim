@@ -99,7 +99,7 @@ do
   vim.g.maplocalleader = ' '
 
   -- Set to true if you have a Nerd Font installed and selected in the terminal
-  vim.g.have_nerd_font = false
+  vim.g.have_nerd_font = true
 
   -- [[ Setting options ]]
   --  See `:help vim.o`
@@ -185,11 +185,27 @@ do
   --  See `:help hlsearch`
   vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
+  -- Copy the current file path, relative to Neovim's working directory.
+  vim.keymap.set('n', '<leader>cp', function()
+    vim.fn.setreg('+', vim.fn.expand '%:.')
+  end, { desc = '[C]opy relative file [P]ath' })
+  vim.keymap.set('n', '<leader>ca', function()
+    vim.fn.setreg('+', vim.fn.expand '%:p')
+  end, { desc = '[C]opy absolute file path' })
+
   -- Diagnostic Config & Keymaps
   --  See `:help vim.diagnostic.Opts`
   vim.diagnostic.config {
     update_in_insert = false,
     severity_sort = true,
+    signs = {
+      text = {
+        [vim.diagnostic.severity.ERROR] = '󰅚',
+        [vim.diagnostic.severity.WARN] = '󰀪',
+        [vim.diagnostic.severity.INFO] = '󰋽',
+        [vim.diagnostic.severity.HINT] = '󰌶',
+      },
+    },
     float = { border = 'rounded', source = 'if_many' },
     underline = { severity = { min = vim.diagnostic.severity.WARN } },
 
@@ -242,6 +258,19 @@ do
 
   -- [[ Basic Autocommands ]]
   --  See `:help lua-guide-autocommands`
+
+  -- Save edited files when leaving insert mode or switching buffers.
+  local autosave_group = vim.api.nvim_create_augroup('autosave-files', { clear = true })
+  vim.api.nvim_create_autocmd({ 'InsertLeave', 'BufLeave' }, {
+    desc = 'Save modified file buffers',
+    group = autosave_group,
+    callback = function(args)
+      local buf = args.buf
+      if not vim.bo[buf].modified or vim.bo[buf].buftype ~= '' or vim.bo[buf].readonly or vim.api.nvim_buf_get_name(buf) == '' then return end
+
+      vim.api.nvim_buf_call(buf, function() vim.cmd 'silent update' end)
+    end,
+  })
 
   -- Highlight when yanking (copying) text
   --  Try it with `yap` in normal mode
@@ -354,11 +383,12 @@ do
   local gitsigns = require 'gitsigns'
   gitsigns.setup {
     signs = {
-      add = { text = '+' }, ---@diagnostic disable-line: missing-fields
-      change = { text = '~' }, ---@diagnostic disable-line: missing-fields
-      delete = { text = '_' }, ---@diagnostic disable-line: missing-fields
+      add = { text = '▎' }, ---@diagnostic disable-line: missing-fields
+      change = { text = '▎' }, ---@diagnostic disable-line: missing-fields
+      delete = { text = '' }, ---@diagnostic disable-line: missing-fields
       topdelete = { text = '‾' }, ---@diagnostic disable-line: missing-fields
-      changedelete = { text = '~' }, ---@diagnostic disable-line: missing-fields
+      changedelete = { text = '▎' }, ---@diagnostic disable-line: missing-fields
+      untracked = { text = '▎' }, ---@diagnostic disable-line: missing-fields
     },
     -- gitsigns.nvim's recommended keymaps:
     on_attach = function(bufnr)
@@ -450,6 +480,9 @@ do
     -- Used for backwards compatibility with plugins that require `nvim-web-devicons` (e.g. telescope.nvim)
     MiniIcons.mock_nvim_web_devicons()
   end
+
+  -- Animate cursor movement, scrolling, and window changes.
+  require('mini.animate').setup()
 
   -- Better Around/Inside textobjects
   --
@@ -736,7 +769,9 @@ do
     -- clangd = {},
     -- gopls = {},
     -- pyright = {},
-    -- tsc = {},
+    html = {},
+    cssls = {},
+    ts_ls = {},
     --
     -- Some languages (like rust) have entire language plugins that can be useful:
     --    https://github.com/mrcjkb/rustaceanvim
@@ -948,7 +983,7 @@ do
   vim.pack.add { { src = gh 'nvim-treesitter/nvim-treesitter', version = 'main' } }
 
   -- Ensure basic parsers are installed
-  local parsers = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+  local parsers = { 'bash', 'c', 'css', 'diff', 'html', 'javascript', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'tsx', 'typescript', 'vim', 'vimdoc' }
   require('nvim-treesitter').install(parsers)
 
   ---@param buf integer
@@ -1015,10 +1050,13 @@ do
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
   -- require 'kickstart.plugins.debug'
-  -- require 'kickstart.plugins.indent_line'
+  require 'kickstart.plugins.indent_line'
   -- require 'kickstart.plugins.lint'
-  -- require 'kickstart.plugins.autopairs'
-  -- require 'kickstart.plugins.neo-tree'
+  require 'kickstart.plugins.autopairs'
+  require 'kickstart.plugins.neo-tree'
+  require 'kickstart.plugins.trouble'
+  require 'kickstart.plugins.hover'
+  require 'kickstart.plugins.auto-session'
 
   -- NOTE: You can add your own plugins, configuration, etc. in `lua/custom/plugins/*.lua`.
   --
