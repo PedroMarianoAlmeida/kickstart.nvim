@@ -192,6 +192,7 @@ do
   vim.keymap.set('n', '<leader>ca', function()
     vim.fn.setreg('+', vim.fn.expand '%:p')
   end, { desc = '[C]opy absolute file path' })
+  vim.keymap.set('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
 
   -- Diagnostic Config & Keymaps
   --  See `:help vim.diagnostic.Opts`
@@ -343,6 +344,10 @@ do
         if not ev.data.active then vim.cmd.packadd 'nvim-treesitter' end
         vim.cmd 'TSUpdate'
         return
+      end
+
+      if name == 'markdown-preview.nvim' then
+        run_build(name, { 'npm', 'install' }, ev.data.path .. '/app')
       end
     end,
   })
@@ -587,6 +592,9 @@ do
     items = {
       { name = '<Space>cp  Copy relative file path', action = '', section = 'Most used' },
       { name = '<Space>ca  Copy absolute file path', action = '', section = 'Most used' },
+      { name = '<Space>bd  Close current buffer', action = '', section = 'Most used' },
+      { name = '<Space>mp  Toggle Markdown browser preview', action = '', section = 'Most used' },
+      { name = 'v, arrows, y  Copy selected text', action = '', section = 'Most used' },
     },
     content_hooks = {
       starter.gen_hook.aligning('center', 'center'),
@@ -1150,7 +1158,24 @@ do
 end
 
 -- ============================================================
--- SECTION 10: OPTIONAL EXAMPLES / NEXT STEPS
+-- SECTION 10: MARKDOWN
+-- In-terminal rendering and Node-based browser preview
+-- ============================================================
+do
+  -- Render Markdown directly in Neovim buffers.
+  vim.pack.add { gh 'MeanderingProgrammer/render-markdown.nvim' }
+  require('render-markdown').setup {}
+
+  -- Open the current Markdown file in a live browser preview.
+  -- markdown-preview.nvim uses Node and installs its app dependencies on first install.
+  vim.pack.add { gh 'iamcco/markdown-preview.nvim' }
+  vim.g.mkdp_auto_start = 0
+  vim.g.mkdp_filetypes = { 'markdown' }
+  vim.keymap.set('n', '<leader>mp', '<cmd>MarkdownPreviewToggle<cr>', { desc = '[M]arkdown [P]review' })
+end
+
+-- ============================================================
+-- SECTION 11: OPTIONAL EXAMPLES / NEXT STEPS
 -- kickstart.plugins.* examples
 -- ============================================================
 do
