@@ -186,13 +186,40 @@ do
   vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
   -- Copy the current file path, relative to Neovim's working directory.
-  vim.keymap.set('n', '<leader>cp', function()
+  vim.keymap.set('n', '<leader>cr', function()
     vim.fn.setreg('+', vim.fn.expand '%:.')
-  end, { desc = '[C]opy relative file [P]ath' })
+  end, { desc = '[C]opy [R]elative file path' })
   vim.keymap.set('n', '<leader>ca', function()
     vim.fn.setreg('+', vim.fn.expand '%:p')
   end, { desc = '[C]opy absolute file path' })
-  vim.keymap.set('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
+
+  local function copy_neo_tree_folder_path(absolute)
+    local ok, manager = pcall(require, 'neo-tree.sources.manager')
+    if not ok then
+      vim.notify('Neo-tree is not available', vim.log.levels.ERROR)
+      return
+    end
+
+    local source = vim.b.neo_tree_source or 'filesystem'
+    local state = manager.get_state(source)
+    local node = state and state.tree and state.tree:get_node()
+    if not node or not node.path then
+      vim.notify('Focus a file or folder in Neo-tree first', vim.log.levels.WARN)
+      return
+    end
+
+    local folder = node.type == 'directory' and node.path or vim.fs.dirname(node.path)
+    local path = vim.fn.fnamemodify(folder, absolute and ':p' or ':.')
+    vim.fn.setreg('+', path)
+    vim.notify('Copied folder path: ' .. path)
+  end
+
+  vim.api.nvim_create_user_command('CA', function() copy_neo_tree_folder_path(true) end, {
+    desc = 'Copy selected Neo-tree folder path',
+  })
+  vim.api.nvim_create_user_command('CP', function() copy_neo_tree_folder_path(false) end, {
+    desc = 'Copy selected Neo-tree folder path relative to cwd',
+  })
 
   -- Diagnostic Config & Keymaps
   --  See `:help vim.diagnostic.Opts`
@@ -447,6 +474,7 @@ do
     spec = {
       { '<leader>s', group = '[S]earch', mode = { 'n', 'v' } },
       { '<leader>t', group = '[T]oggle' },
+      { '<leader>c', group = '[C]ustom commands' },
       { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } }, -- Enable gitsigns recommended keymaps first
       { 'gr', group = 'LSP Actions', mode = { 'n' } },
     },
@@ -590,10 +618,14 @@ do
   starter.setup {
     header = function() return animation_frames[animation_frame] end,
     items = {
-      { name = '<Space>cp  Copy relative file path', action = '', section = 'Most used' },
+      { name = '<Space>cr  Copy relative file path', action = '', section = 'Most used' },
       { name = '<Space>ca  Copy absolute file path', action = '', section = 'Most used' },
-      { name = '<Space>bd  Close current buffer', action = '', section = 'Most used' },
-      { name = '<Space>mp  Toggle Markdown browser preview', action = '', section = 'Most used' },
+      { name = ':CA  Copy selected Neo-tree folder path', action = '', section = 'Most used' },
+      { name = ':CP  Copy selected Neo-tree folder path relative to cwd', action = '', section = 'Most used' },
+      { name = 'R  Refresh Neo-tree', action = '', section = 'Most used' },
+      { name = '<Space>cm  Toggle Markdown browser preview', action = '', section = 'Most used' },
+      { name = '<Space>ch  Start HTML live preview', action = '', section = 'Most used' },
+      { name = '<Space>cp  Start PDF browser preview', action = '', section = 'Most used' },
       { name = 'v, arrows, y  Copy selected text', action = '', section = 'Most used' },
     },
     content_hooks = {
@@ -1171,11 +1203,71 @@ do
   vim.pack.add { gh 'iamcco/markdown-preview.nvim' }
   vim.g.mkdp_auto_start = 0
   vim.g.mkdp_filetypes = { 'markdown' }
-  vim.keymap.set('n', '<leader>mp', '<cmd>MarkdownPreviewToggle<cr>', { desc = '[M]arkdown [P]review' })
+  vim.keymap.set('n', '<leader>cm', '<cmd>MarkdownPreviewToggle<cr>', { desc = '[C]ustom [M]arkdown preview' })
 end
 
 -- ============================================================
--- SECTION 11: OPTIONAL EXAMPLES / NEXT STEPS
+-- SECTION 11: HTML & PDF
+-- Browser preview with automatic reloads
+-- ============================================================
+do
+  local function start_html_live_preview()
+    local html_file = vim.api.nvim_buf_get_name(0)
+    if html_file == '' or vim.bo.filetype ~= 'html' then
+      vim.notify('Open an HTML file first.', vim.log.levels.WARN)
+      return
+    end
+
+    if vim.bo.modified then vim.cmd.write() end
+
+    local directory = vim.fn.fnamemodify(html_file, ':h')
+    local filename = vim.fn.fnamemodify(html_file, ':t')
+    vim.cmd 'botright 12split'
+    vim.cmd('terminal npx --yes live-server ' .. vim.fn.shellescape(directory) .. ' --open=' .. vim.fn.shellescape(filename))
+    vim.cmd 'startinsert'
+  end
+
+  vim.api.nvim_create_user_command('HtmlLivePreview', start_html_live_preview, {})
+  vim.keymap.set('n', '<leader>ch', start_html_live_preview, { desc = '[C]ustom [H]TML live preview' })
+
+  local function start_pdf_live_preview()
+    local pdf_file = vim.api.nvim_buf_get_name(0)
+    if pdf_file == '' or vim.fn.fnamemodify(pdf_file, ':e'):lower() ~= 'pdf' then
+      vim.notify('Open a PDF file first.', vim.log.levels.WARN)
+      return
+    end
+
+    local directory = vim.fn.fnamemodify(pdf_file, ':h')
+    local filename = vim.fn.fnamemodify(pdf_file, ':t')
+    local preview_directory = directory .. '/tmp'
+    local preview_filename = 'nvim-pdf-preview-' .. vim.fn.sha256(pdf_file):sub(1, 12) .. '.html'
+    local preview_file = preview_directory .. '/' .. preview_filename
+    local preview_html = {
+      '<!doctype html>',
+      '<html lang="en">',
+      '<head><meta charset="utf-8"><title>PDF preview</title>',
+      '<style>html,body,embed{width:100%;height:100%;margin:0;border:0;background:#202020}</style></head>',
+      '<body><embed src="../' .. vim.uri_encode(filename) .. '" type="application/pdf"></body>',
+      '</html>',
+    }
+    vim.fn.mkdir(preview_directory, 'p')
+    vim.fn.writefile(preview_html, preview_file)
+
+    vim.cmd 'botright 12split'
+    vim.fn.termopen({ 'npx', '--yes', 'live-server', directory, '--open=tmp/' .. preview_filename }, {
+      on_exit = function()
+        vim.schedule(function() vim.fn.delete(preview_file) end)
+      end,
+    })
+    vim.cmd 'startinsert'
+  end
+
+  vim.api.nvim_create_user_command('PdfPreview', start_pdf_live_preview, {})
+  vim.keymap.set('n', '<leader>cp', start_pdf_live_preview, { desc = '[C]ustom PDF [P]review' })
+end
+
+-- ============================================================
+-- SECTION 12: OPTIONAL EXAMPLES / NEXT STEPS
 -- kickstart.plugins.* examples
 -- ============================================================
 do
